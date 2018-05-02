@@ -1,0 +1,889 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Infrastructure as Code (Terraform) Code Analysis and Alerting",
+    "Parameters": {
+        "Region": {
+            "Type": "String",
+            "Default": "us-west-2"
+        },
+        "CodePipelineS3ObjectKey": {
+            "Type": "String",
+            "Default": "src.zip"
+        }
+    },
+    "Mappings": {
+        "SubnetConfig": {
+            "VPC": {
+                "CIDR": "10.0.0.0/20"
+            },
+            "DevSubnet": {
+                "CIDR": "10.0.0.0/24",
+                "AZ": "us-west-2a"
+            }
+        },
+        "UserConfig": {
+            "Login": {
+                "Name": "student",
+                "Pass": "password"
+            }
+        }
+    },
+    "Resources": {
+        "S3Copy": {
+            "Type": "Custom::CopyToS3",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "CopyFilesToS3",
+                        "Arn"
+                    ]
+                },
+                "S3BucketName": {
+                    "Ref": "CodeArtifacts"
+                },
+                "Urls": [
+                    {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "https://github.com/lrakai/protect-code-with-gauntlt/blob/master/src/cicd/",
+                                {
+                                    "Ref": "CodePipelineS3ObjectKey"
+                                },
+                                "?raw=true"
+                            ]
+                        ]
+                    }
+                ]
+            }
+        },
+        "CopyFilesToS3": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": {
+                        "Fn::Join": [
+                            "\n",
+                            [
+                                "",
+                                "import os",
+                                "import urllib.request",
+                                "from urllib.parse import urlparse",
+                                "import json",
+                                "import boto3",
+                                "import cfnresponse",
+                                "",
+                                "print('Loading function')",
+                                "",
+                                "s3 = boto3.resource('s3')",
+                                "",
+                                "",
+                                "def save_to_local(url):",
+                                "    urlPath = urlparse(url).path",
+                                "    fileName = os.path.basename(urlPath)",
+                                "    filePath = '/tmp/' + fileName",
+                                "    urllib.request.urlretrieve(url, filePath)",
+                                "    return filePath",
+                                "",
+                                "",
+                                "def upload_to_s3(filePath, bucket):",
+                                "    fileName = os.path.basename(filePath)",
+                                "    s3.Object(bucket, fileName).put(Body=open(filePath, 'rb'))",
+                                "",
+                                "",
+                                "def copy_to_s3(url, bucket):",
+                                "    filePath = save_to_local(url)",
+                                "    upload_to_s3(filePath, bucket)",
+                                "",
+                                "",
+                                "def lambda_handler(event, context):",
+                                "    print('Received event: ' + json.dumps(event, indent=2))",
+                                "",
+                                "    if event['RequestType'] == 'Create':",
+                                "        # get the properties set in the CloudFormation resource",
+                                "        properties = event['ResourceProperties']",
+                                "        urls = properties['Urls']",
+                                "        bucket = properties['S3BucketName']",
+                                "",
+                                "        try:",
+                                "            for url in urls:",
+                                "                copy_to_s3(url, bucket)",
+                                "",
+                                "        except Exception as e:",
+                                "            print(e)",
+                                "            cfnresponse.send(event, context, cfnresponse.FAILED, {",
+                                "                             'Response': 'Failure'})",
+                                "            return",
+                                "",
+                                "    cfnresponse.send(event, context, cfnresponse.SUCCESS,",
+                                "                     {'Response': 'Success'})"
+                            ]
+                        ]
+                    }
+                },
+                "Runtime": "python3.6"
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "root",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:*"
+                                    ],
+                                    "Resource": "arn:aws:logs:*:*:*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CodeBuildRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "codebuild.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "codebuild-policy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        "*"
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ssm:GetParameters"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "arn:aws:ssm:us-west-2:",
+                                                {
+                                                    "Ref": "AWS::AccountId"
+                                                },
+                                                ":parameter/CodeBuild/*"
+                                            ]
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "RoleName": "codebuild-role"
+            }
+        },
+        "CodePipelineRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "codepipeline.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "codepipeline-policy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "cloudwatch:*",
+                                        "s3:*",
+                                        "iam:PassRole",
+                                        "ec2:DescribeInstances",
+                                        "ec2:DescribeImages",
+                                        "ec2:DescribeAddresses",
+                                        "ec2:DescribeSubnets",
+                                        "ec2:DescribeVpcs",
+                                        "ec2:DescribeSecurityGroups",
+                                        "ec2:DescribeKeyPairs",
+                                        "elasticloadbalancing:DescribeLoadBalancers"
+                                    ],
+                                    "Resource": "*",
+                                    "Effect": "Allow"
+                                },
+                                {
+                                    "Action": [
+                                        "codebuild:BatchGetBuilds",
+                                        "codebuild:StartBuild"
+                                    ],
+                                    "Resource": "*",
+                                    "Effect": "Allow"
+                                },
+                                {
+                                    "Effect": "Deny",
+                                    "Action": [
+                                        "ec2:ModifyInstanceAttribute",
+                                        "ec2:*Reserved*",
+                                        "ec2:*Spot*",
+                                        "dynamodb:*Reserved*",
+                                        "rds:*Reserved*",
+                                        "elasticache:*Reserved*",
+                                        "redshift:*Reserved*",
+                                        "aws-marketplace:*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "RoleName": "codepipeline-role"
+            }
+        },
+        "Cloud9Ec2InstanceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "deploy-instance-policy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "s3:Get*",
+                                        "s3:List*",
+                                        "s3:Put*",
+                                        "ec2:Describe*"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "RoleName": "cloud9-instance-role"
+            }
+        },
+        "DeployInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "Cloud9Ec2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "Cloud9Env": {
+            "Type": "AWS::Cloud9::EnvironmentEC2",
+            "Properties": {
+                "Description": "Gauntlt Dev Environment",
+                "AutomaticStopTimeMinutes": 60,
+                "InstanceType": "t2.micro",
+                "OwnerArn": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "arn:aws:iam::",
+                            {
+                                "Ref": "AWS::AccountId"
+                            },
+                            ":user/student"
+                        ]
+                    ]
+                },
+                "Name": "Gauntlt",
+                "SubnetId": {
+                    "Ref": "DevSubnet"
+                }
+            }
+        },
+        "DevVpc": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "VPC",
+                        "CIDR"
+                    ]
+                },
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Dev Vpc"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Dev"
+                    }
+                ]
+            }
+        },
+        "DevSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DevVpc"
+                },
+                "MapPublicIpOnLaunch": true,
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "DevSubnet",
+                        "AZ"
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "DevSubnet",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Dev Subnet"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Dev"
+                    }
+                ]
+            }
+        },
+        "DevInternetGatewayAttach": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DevVpc"
+                },
+                "InternetGatewayId": {
+                    "Ref": "DevInternetGateway"
+                }
+            }
+        },
+        "DevPublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DevVpc"
+                }
+            }
+        },
+        "DevPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "DevPublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "DevInternetGateway"
+                }
+            }
+        },
+        "DevSubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "DevSubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "DevPublicRouteTable"
+                }
+            }
+        },
+        "DevInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway"
+        },
+        "DevSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow incoming http and ssh traffic",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "80",
+                        "ToPort": "80",
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "443",
+                        "ToPort": "443",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "DevVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Dev Servers"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Dev"
+                    }
+                ]
+            }
+        },
+        "CodeArtifacts": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                }
+            }
+        },
+        "AppPipeline": {
+            "Type": "AWS::CodePipeline::Pipeline",
+            "Properties": {
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "CodePipelineRole",
+                        "Arn"
+                    ]
+                },
+                "Stages": [
+                    {
+                        "Name": "Source",
+                        "Actions": [
+                            {
+                                "Name": "SourceAction",
+                                "ActionTypeId": {
+                                    "Category": "Source",
+                                    "Owner": "AWS",
+                                    "Version": "1",
+                                    "Provider": "S3"
+                                },
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ],
+                                "Configuration": {
+                                    "S3Bucket": {
+                                        "Ref": "CodeArtifacts"
+                                    },
+                                    "S3ObjectKey": {
+                                        "Ref": "CodePipelineS3ObjectKey"
+                                    }
+                                },
+                                "RunOrder": 1
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Build",
+                        "Actions": [
+                            {
+                                "Name": "BuildAction",
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ],
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ],
+                                "ActionTypeId": {
+                                    "Category": "Build",
+                                    "Owner": "AWS",
+                                    "Version": "1",
+                                    "Provider": "CodeBuild"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "BuildProject"
+                                    }
+                                },
+                                "RunOrder": 1
+                            }
+                        ]
+                    }
+                ],
+                "ArtifactStore": {
+                    "Type": "S3",
+                    "Location": {
+                        "Ref": "CodeArtifacts"
+                    }
+                },
+                "RestartExecutionOnUpdate": true
+            }
+        },
+        "BuildProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "Properties": {
+                "Name": "App-Build",
+                "Description": "Build app",
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "CodeBuildRole",
+                        "Arn"
+                    ]
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "ComputeType": "BUILD_GENERAL1_SMALL",
+                    "Image": "aws/codebuild/docker:17.09.0",
+                    "EnvironmentVariables": [
+                        {
+                            "Name": "varName",
+                            "Value": "varValue"
+                        }
+                    ]
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE"
+                },
+                "TimeoutInMinutes": 10
+            }
+        },
+        "TestProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "Properties": {
+                "Name": "App-Test",
+                "Description": "Build app",
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "CodeBuildRole",
+                        "Arn"
+                    ]
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "ComputeType": "BUILD_GENERAL1_SMALL",
+                    "Image": "aws/codebuild/docker:17.09.0",
+                    "EnvironmentVariables": [
+                        {
+                            "Name": "varName",
+                            "Value": "varValue"
+                        }
+                    ]
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE",
+                    "BuildSpec": "buildspec.test.yml"
+                },
+                "TimeoutInMinutes": 10
+            }
+        },
+        "Group": {
+            "Type": "AWS::IAM::Group",
+            "Properties": {
+                "GroupName": "Students",
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "students-policy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloud9:DescribeEnvironments",
+                                        "cloud9:ListEnvironments",
+                                        "cloud9:GetUserPublicKey",
+                                        "cloud9:GetUserSettings",
+                                        "cloud9:GetEnvironmentConfig",
+                                        "cloud9:UpdateUserSettings",
+                                        "cloud9:ValidateEnvironmentName",
+                                        "ec2:DescribeSubnets",
+                                        "ec2:DescribeVpcs",
+                                        "ec2:AuthorizeSecurityGroupIngress",
+                                        "ec2:RevokeSecurityGroupIngress",
+                                        "iam:GetUser",
+                                        "iam:ListUsers",
+                                        "s3:Get*",
+                                        "s3:List*",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloud9:DescribeEnvironmentMemberships"
+                                    ],
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "Null": {
+                                            "cloud9:UserArn": "true",
+                                            "cloud9:EnvironmentId": "true"
+                                        }
+                                    }
+                                },
+                                {
+                                    "Action": [
+                                        "ec2:Describe*"
+                                    ],
+                                    "Resource": "*",
+                                    "Effect": "Allow",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "ec2:Region": "us-west-2"
+                                        }
+                                    }
+                                },
+                                {
+                                    "Action": [
+                                        "health:DescribeEventAggregates",
+                                        "codebuild:ListProjects",
+                                        "codebuild:ListBuilds",
+                                        "codebuild:ListConnectedOAuthAccounts",
+                                        "codebuild:ListCuratedEnvironmentImages",
+                                        "iam:ListRoles"
+                                    ],
+                                    "Resource": [
+                                        "*"
+                                    ],
+                                    "Effect": "Allow"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codebuild:*"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Join": [
+                                                "",
+                                                [
+                                                    "arn:aws:codebuild:us-west-2:",
+                                                    {
+                                                        "Ref": "AWS::AccountId"
+                                                    },
+                                                    ":project/*"
+                                                ]
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Action": [
+                                        "logs:GetLogEvents"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Join": [
+                                                "",
+                                                [
+                                                    "arn:aws:logs:us-west-2:",
+                                                    {
+                                                        "Ref": "AWS::AccountId"
+                                                    },
+                                                    ":log-group:/aws/codebuild/*:log-stream:*"
+                                                ]
+                                            ]
+                                        }
+                                    ],
+                                    "Effect": "Allow"
+                                },
+                                {
+                                    "Action": [
+                                        "codepipeline:*"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Join": [
+                                                "",
+                                                [
+                                                    "arn:aws:codepipeline:us-west-2:",
+                                                    {
+                                                        "Ref": "AWS::AccountId"
+                                                    },
+                                                    ":*"
+                                                ]
+                                            ]
+                                        }
+                                    ],
+                                    "Effect": "Allow"
+                                },
+                                {
+                                    "Action": [
+                                        "iam:PassRole"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Join": [
+                                                "",
+                                                [
+                                                    "arn:aws:iam::",
+                                                    {
+                                                        "Ref": "AWS::AccountId"
+                                                    },
+                                                    ":role/codebuild-role"
+                                                ]
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Join": [
+                                                "",
+                                                [
+                                                    "arn:aws:iam::",
+                                                    {
+                                                        "Ref": "AWS::AccountId"
+                                                    },
+                                                    ":role/codepipeline-role"
+                                                ]
+                                            ]
+                                        }
+                                    ],
+                                    "Effect": "Allow"
+                                },
+                                {
+                                    "Action": [
+                                        "s3:GetBucketPolicy",
+                                        "s3:GetObject",
+                                        "s3:ListAllMyBuckets",
+                                        "s3:ListBucket",
+                                        "s3:CreateBucket",
+                                        "s3:PutBucketPolicy"
+                                    ],
+                                    "Resource": [
+                                        "arn:aws:s3:::*"
+                                    ],
+                                    "Effect": "Allow"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "User": {
+            "Type": "AWS::IAM::User",
+            "Properties": {
+                "LoginProfile": {
+                    "Password": {
+                        "Fn::FindInMap": [
+                            "UserConfig",
+                            "Login",
+                            "Pass"
+                        ]
+                    }
+                },
+                "Path": "/",
+                "Groups": [
+                    "Students"
+                ],
+                "UserName": {
+                    "Fn::FindInMap": [
+                        "UserConfig",
+                        "Login",
+                        "Name"
+                    ]
+                }
+            }
+        }
+    }
+}
