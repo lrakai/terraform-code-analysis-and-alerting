@@ -35,7 +35,7 @@
                 "IamInstanceProfile": {
                     "Ref": "BuildInstanceProfile"
                 },
-                "ImageId": "ami-066d0066",
+                "ImageId": "ami-4e79ed36",
                 "InstanceType": "t2.micro",
                 "KeyName": {
                     "Ref": "AWS::AccountId"
