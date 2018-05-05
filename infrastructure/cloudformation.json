@@ -62,7 +62,17 @@
                         "Fn::Join": [
                             "",
                             [
-                                "#!/bin/bash\n"
+                                "#!/bin/bash\n",
+                                "wget -q -O - https://pkg.jenkins.io/debian/jenkins-ci.org.key | sudo apt-key add -\n",
+                                "sudo sh -c 'echo deb http://pkg.jenkins.io/debian-stable binary/ > /etc/apt/sources.list.d/jenkins.list'\n",
+                                "sudo apt-get update\n",
+                                "sudo apt-get install jenkins\n",
+                                "apt-get install -y jenkins=2.107.2\n",
+                                "iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080\n",
+                                "sed 's/\\(-jar $JENKINS_WAR\\)/-Djenkins.install.runSetupWizard=false \\1/' /etc/init.d/jenkins\n",
+                                "java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s http://localhost:8080 install-plugin Git\n",
+                                "systemctl daemon-reload\n",
+                                "systemctl restart jenkins\n"
                             ]
                         ]
                     }
