@@ -70,9 +70,38 @@
                                 "apt-get install -y jenkins=2.107.2\n",
                                 "iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080\n",
                                 "sed 's/\\(-jar $JENKINS_WAR\\)/-Djenkins.install.runSetupWizard=false \\1/' /etc/init.d/jenkins\n",
-                                "java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s http://localhost:8080 install-plugin Git\n",
+                                "java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s http://localhost:8080 install-plugin Git snsnotify\n",
                                 "systemctl daemon-reload\n",
-                                "systemctl restart jenkins\n"
+                                "systemctl restart jenkins\n",
+                                "adduser git --disabled-password --gecos \"\"\n",
+                                "mkdir -p /srv/git/lab.git\n",
+                                "cd /srv/git/lab.git\n",
+                                "git init --bare --shared\n",
+                                "touch git-daemon-export-ok\n",
+                                "cd ..\n",
+                                "chown git:git -R /srv/git\n",
+                                "cat <<EOF > /etc/systemd/system/git-daemon.service\n",
+                                "[Unit]\n",
+                                "Description=Start Git Daemon\n",
+                                "\n",
+                                "[Service]\n",
+                                "ExecStart=/usr/bin/git daemon --enable=receive-pack --reuseaddr --base-path=/srv/git/ /srv/git/\n",
+                                "\n",
+                                "Restart=always\n",
+                                "RestartSec=500ms\n",
+                                "\n",
+                                "StandardOutput=syslog\n",
+                                "StandardError=syslog\n",
+                                "SyslogIdentifier=git-daemon\n",
+                                "\n",
+                                "User=git\n",
+                                "Group=git\n",
+                                "\n",
+                                "[Install]\n",
+                                "WantedBy=multi-user.target\n",
+                                "EOF\n",
+                                "systemctl enable git-daemon\n",
+                                "systemctl start git-daemon\n"
                             ]
                         ]
                     }
@@ -304,7 +333,7 @@
         "BuildSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupDescription": "Allow incoming http and ssh traffic",
+                "GroupDescription": "Allow incoming http, git, and ssh traffic",
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
@@ -322,6 +351,12 @@
                         "IpProtocol": "tcp",
                         "FromPort": "443",
                         "ToPort": "443",
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "9418",
+                        "ToPort": "9418",
                         "CidrIp": "0.0.0.0/0"
                     }
                 ],
