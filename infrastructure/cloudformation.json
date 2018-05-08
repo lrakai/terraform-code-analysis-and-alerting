@@ -108,7 +108,10 @@
                                 "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -\n",
                                 "add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\"\n",
                                 "apt-get update\n",
-                                "apt-get install -y docker-ce=18.03.0~ce-0~ubuntu\n"
+                                "apt-get install -y docker-ce=18.03.0~ce-0~ubuntu\n",
+                                "usermod -G jenkins,docker jenkins\n",
+                                "docker pull hashicorp/terraform:0.11.3\n",
+                                "docker pull wata727/tflint:0.5.4\n"
                             ]
                         ]
                     }
