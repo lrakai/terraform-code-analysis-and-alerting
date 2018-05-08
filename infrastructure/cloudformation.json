@@ -63,10 +63,10 @@
                             "",
                             [
                                 "#!/bin/bash\n",
-                                "wget -q -O - https://pkg.jenkins.io/debian/jenkins-ci.org.key | sudo apt-key add -\n",
-                                "sudo sh -c 'echo deb http://pkg.jenkins.io/debian-stable binary/ > /etc/apt/sources.list.d/jenkins.list'\n",
-                                "sudo apt-get update\n",
-                                "sudo apt-get install jenkins\n",
+                                "wget -q -O - https://pkg.jenkins.io/debian/jenkins-ci.org.key | apt-key add -\n",
+                                "=sh -c 'echo deb http://pkg.jenkins.io/debian-stable binary/ > /etc/apt/sources.list.d/jenkins.list'\n",
+                                "=apt-get update\n",
+                                "=apt-get install jenkins\n",
                                 "apt-get install -y jenkins=2.107.2\n",
                                 "iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080\n",
                                 "sed -i 's/\\(-jar $JENKINS_WAR\\)/-Djenkins.install.runSetupWizard=false \\1/' /etc/init.d/jenkins\n",
@@ -103,7 +103,12 @@
                                 "WantedBy=multi-user.target\n",
                                 "EOF\n",
                                 "systemctl enable git-daemon\n",
-                                "systemctl start git-daemon\n"
+                                "systemctl start git-daemon\n",
+                                "apt-get install apt-transport-https ca-certificates curl software-properties-common\n",
+                                "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -\n",
+                                "add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\"\n",
+                                "apt-get update\n",
+                                "apt-get install -y docker-ce=18.03.0~ce-0~ubuntu\n"
                             ]
                         ]
                     }
