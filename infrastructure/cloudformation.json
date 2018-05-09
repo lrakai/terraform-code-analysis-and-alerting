@@ -77,7 +77,7 @@
                                 "sleep 30\n",
                                 "java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s http://localhost:8080 install-plugin Git snsnotify\n",
                                 "echo \"<?xml version='1.1' encoding='UTF-8'?>\" >> /var/lib/jenkins/org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier.xml\n",
-                                "echo \"<org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier_-DescriptorImpl plugin=\"snsnotify@1.13\">\" >> /var/lib/jenkins/org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier.xml\n",
+                                "echo \"<org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier_-DescriptorImpl plugin=\\\"snsnotify@1.13\\\">\" >> /var/lib/jenkins/org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier.xml\n",
                                 "echo \"  <defaultLocalCredential>true</defaultLocalCredential>\" >> /var/lib/jenkins/org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier.xml\n",
                                 "echo \"</org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier_-DescriptorImpl>\" >> /var/lib/jenkins/org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier.xml\n",
                                 "systemctl restart jenkins\n",
