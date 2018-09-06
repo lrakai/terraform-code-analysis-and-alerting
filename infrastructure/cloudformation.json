@@ -83,7 +83,7 @@
                                 "INSTANCE_URL=$(curl http://169.254.169.254/latest/meta-data/public-hostname)\n",
                                 "echo \"<?xml version='1.1' encoding='UTF-8'?>\" >> /var/lib/jenkins/jenkins.model.JenkinsLocationConfiguration.xml\n",
                                 "echo \"<jenkins.model.JenkinsLocationConfiguration>\" >> /var/lib/jenkins/jenkins.model.JenkinsLocationConfiguration.xml\n",
-                                "echo \"  <jenkinsUrl>${INSTANCE_URL}</jenkinsUrl>\" >> /var/lib/jenkins/jenkins.model.JenkinsLocationConfiguration.xml\n",
+                                "echo \"  <jenkinsUrl>http://${INSTANCE_URL}/</jenkinsUrl>\" >> /var/lib/jenkins/jenkins.model.JenkinsLocationConfiguration.xml\n",
                                 "echo \"</jenkins.model.JenkinsLocationConfiguration>\" >> /var/lib/jenkins/jenkins.model.JenkinsLocationConfiguration.xml\n",
                                 "systemctl restart jenkins\n",
                                 "adduser git --disabled-password --gecos \"\"\n",
