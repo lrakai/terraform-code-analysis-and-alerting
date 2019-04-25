@@ -36,7 +36,7 @@
                     "Ref": "BuildInstanceProfile"
                 },
                 "ImageId": "ami-4e79ed36",
-                "InstanceType": "t2.micro",
+                "InstanceType": "t3.micro",
                 "KeyName": {
                     "Ref": "AWS::AccountId"
                 },
@@ -66,8 +66,8 @@
                                 "wget -q -O - https://pkg.jenkins.io/debian/jenkins-ci.org.key | apt-key add -\n",
                                 "sh -c 'echo deb http://pkg.jenkins.io/debian-stable binary/ > /etc/apt/sources.list.d/jenkins.list'\n",
                                 "apt-get update\n",
-                                "apt-get install jenkins\n",
-                                "apt-get install -y jenkins=2.107.2\n",
+                                "apt-get install -y openjdk-8-jdk\n",
+                                "apt-get install -y jenkins=2.164.2\n",
                                 "iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080\n",
                                 "sed -i 's/\\(-jar $JENKINS_WAR\\)/-Djenkins.install.runSetupWizard=false \\1/' /etc/init.d/jenkins\n",
                                 "sleep 30\n",
@@ -80,6 +80,11 @@
                                 "echo \"<org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier_-DescriptorImpl plugin=\\\"snsnotify@1.13\\\">\" >> /var/lib/jenkins/org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier.xml\n",
                                 "echo \"  <defaultLocalCredential>true</defaultLocalCredential>\" >> /var/lib/jenkins/org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier.xml\n",
                                 "echo \"</org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier_-DescriptorImpl>\" >> /var/lib/jenkins/org.jenkinsci.plugins.snsnotify.AmazonSNSNotifier.xml\n",
+                                "INSTANCE_URL=$(curl http://169.254.169.254/latest/meta-data/public-hostname)\n",
+                                "echo \"<?xml version='1.1' encoding='UTF-8'?>\" >> /var/lib/jenkins/jenkins.model.JenkinsLocationConfiguration.xml\n",
+                                "echo \"<jenkins.model.JenkinsLocationConfiguration>\" >> /var/lib/jenkins/jenkins.model.JenkinsLocationConfiguration.xml\n",
+                                "echo \"  <jenkinsUrl>http://${INSTANCE_URL}/</jenkinsUrl>\" >> /var/lib/jenkins/jenkins.model.JenkinsLocationConfiguration.xml\n",
+                                "echo \"</jenkins.model.JenkinsLocationConfiguration>\" >> /var/lib/jenkins/jenkins.model.JenkinsLocationConfiguration.xml\n",
                                 "systemctl restart jenkins\n",
                                 "adduser git --disabled-password --gecos \"\"\n",
                                 "mkdir -p /srv/git/lab.git\n",
